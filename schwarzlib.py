@@ -1320,7 +1320,7 @@ def runPlot(datasets,                           # list of [kinematic] datasets t
     chi2labels = []
     for param in panel_params:
         patches = matplotlib.collections.PatchCollection(
-            [matplotlib.patches.Polygon(p, closed=True) for p in apertures],
+            [matplotlib.patches.Polygon(p, closed=True) for p in apertures],        ### ... Polygon(p, True) for older versions of matplotlib.
             picker=0.0, edgecolor=(0.5,0.5,0.5,0.5), linewidths=0)
         patchcoll.append(patches)
         ax=fig.add_axes(param['extent'])
@@ -1341,11 +1341,11 @@ def runPlot(datasets,                           # list of [kinematic] datasets t
         cax = fig.add_axes([param['extent'][0], param['extent'][1]-0.035, param['extent'][2], 0.01])
         fig.colorbar(patch, cax=cax, orientation='horizontal', ticks=matplotlib.ticker.MaxNLocator(6))
     # make sure that pan/zoom is synchronized between kinematic maps
-    # for p in panels[1:]:
+    # for p in panels[1:]:                                   ### for older versions of matplotlib
         # p.get_shared_x_axes().join(*panels)
         # p.get_shared_y_axes().join(*panels)
     # enforce a correct aspect ratio for kinematic maps
-    for p in panels[1:]:
+    for p in panels[1:]:                                     ### for newer versions of matplotlib
         p.sharex
         p.sharey
 

@@ -513,39 +513,7 @@ else:
     ) )
 
 
-# create a dark halo according to the provided parameters (type, scale radius and circular velocity)
-if rhalo>0 and vhalo>0:
-    if   halotype.upper() == 'LOG':
-        densityHalo = agama.schwarzlib.makeDensityLogHalo(rhalo, vhalo)
-    elif halotype.upper() == 'NFW':
-        densityHalo = agama.schwarzlib.makeDensityNFWHalo(rhalo, vhalo)
-    else:
-        raise ValueError('Invalid halo type')
-else:
-    densityHalo = agama.Density(type='Plummer', mass=0, scaleRadius=1)  # no halo
 
-# additional density component for constructing the initial conditions:
-# create more orbits at small radii to better resolve the kinematics around the central black hole
-densityExtra = agama.Density(type='Dehnen', scaleradius=1)
-
-# fiducialMbh: Mbh used to construct initial conditions (may differ from Mbh used to integrate orbits;
-# the idea is to keep fiducialMbh fixed between runs with different Mbh, so that the initial conditions
-# for the orbit library are the same, compensating one source of noise in chi2 due to randomness)
-fiducialMbh = densityStars.totalMass() * 0.01
-
-# potential of the galaxy, excluding the central BH
-pot_gal   = agama.Potential(type='Multipole',
-    density=agama.Density(densityStars, densityHalo),  # all density components together
-    lmax=32,  # lmax is set to a large value to accurately represent a disky density profile
-    mmax=0 if symmetry[0]!='t' else 6, gridSizeR=40)  # mmax>0 only for triaxial systems
-# potential of the central BH
-pot_bh    = agama.Potential(type='Plummer', mass=Mbh, scaleRadius=1e-4)
-# same for the fiducial BH
-pot_bhfidu= agama.Potential(type='Plummer', mass=fiducialMbh, scaleRadius=1e-4)
-# total potential of the model (used to integrate the orbits)
-pot_total = agama.Potential(pot_gal, pot_bh)
-# total potential used to generate initial conditions only
-pot_fidu  = agama.Potential(pot_gal, pot_bhfidu)
 
 
 ### finally, decide what to do
@@ -565,7 +533,42 @@ if command == 'RUN':
 
     for i in tqdm(BhSteps):
         Mbh = 10**i
-    
+
+        # create a dark halo according to the provided parameters (type, scale radius and circular velocity)
+        if rhalo>0 and vhalo>0:
+            if   halotype.upper() == 'LOG':
+                densityHalo = agama.schwarzlib.makeDensityLogHalo(rhalo, vhalo)
+            elif halotype.upper() == 'NFW':
+                densityHalo = agama.schwarzlib.makeDensityNFWHalo(rhalo, vhalo)
+            else:
+                raise ValueError('Invalid halo type')
+        else:
+            densityHalo = agama.Density(type='Plummer', mass=0, scaleRadius=1)  # no halo
+        
+        # additional density component for constructing the initial conditions:
+        # create more orbits at small radii to better resolve the kinematics around the central black hole
+        densityExtra = agama.Density(type='Dehnen', scaleradius=1)
+        
+        # fiducialMbh: Mbh used to construct initial conditions (may differ from Mbh used to integrate orbits;
+        # the idea is to keep fiducialMbh fixed between runs with different Mbh, so that the initial conditions
+        # for the orbit library are the same, compensating one source of noise in chi2 due to randomness)
+        fiducialMbh = densityStars.totalMass() * 0.01
+        
+        # potential of the galaxy, excluding the central BH
+        pot_gal   = agama.Potential(type='Multipole',
+            density=agama.Density(densityStars, densityHalo),  # all density components together
+            lmax=32,  # lmax is set to a large value to accurately represent a disky density profile
+            mmax=0 if symmetry[0]!='t' else 6, gridSizeR=40)  # mmax>0 only for triaxial systems
+        # potential of the central BH
+        pot_bh    = agama.Potential(type='Plummer', mass=Mbh, scaleRadius=1e-4)
+        # same for the fiducial BH
+        pot_bhfidu= agama.Potential(type='Plummer', mass=fiducialMbh, scaleRadius=1e-4)
+        # total potential of the model (used to integrate the orbits)
+        pot_total = agama.Potential(pot_gal, pot_bh)
+        # total potential used to generate initial conditions only
+        pot_fidu  = agama.Potential(pot_gal, pot_bhfidu)
+
+        
         # prepare initial conditions - use the same total potential independent of the actual Mbh
         # [OPT]: choose the sampling method: isotropic IC drawn from Eddington DF are created by
         #   density.sample(numorbits, potential)

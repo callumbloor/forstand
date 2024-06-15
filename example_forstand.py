@@ -131,6 +131,7 @@ specified as command-line arguments.
 '''
 
 import sys, numpy, agama
+from tqdm import tqdm
 
 ############### parse parameters from command-line arguments or assign default values #############
 arglist = []
@@ -144,7 +145,9 @@ args = dict(arglist)
 distance  = float(args.get('DISTANCE', 20626.5))# [REQ] assumed distance [kpc]
 arcsec2kpc= distance * numpy.pi / 648000        # conversion factor (number of kiloparsecs in one arcsecond)
 agama.setUnits(mass=1, length=arcsec2kpc, velocity=1)  # [OPT] units: mass = 1 Msun, length = 1", velocity = 1 km/s
-Mbh       = float(args.get('MBH', 1e8))         # [REQ] mass of the central black hole  [Msun]
+Mbh       = float(args.get('MBH', None))        # [REQ] mass of the central black hole  [Msun] (logarithmic)
+initialMbh= (args.get('START', None))           # [OPT] start value for automated black hole mass models (logarithmic)
+finalMbh  = (args.get('END', None))             # [OPT] final value for automated black hole mass models (logarithmic)
 Omega     = float(args.get('OMEGA', 0))         # [REQ] pattern speed (relevant only for non-axisymmetric models) [km/s/length_unit]
 halotype  =       args.get('HALOTYPE', 'nfw')   # [OPT] halo type: 'LOG' or 'NFW'
 vhalo     = float(args.get('VHALO', 190))       # [OPT] asymptotic (LOG) or peak (NFW) circular velocity of the halo [km/s]
@@ -548,38 +551,53 @@ pot_fidu  = agama.Potential(pot_gal, pot_bhfidu)
 ### finally, decide what to do
 if command == 'RUN':
 
-    # prepare initial conditions - use the same total potential independent of the actual Mbh
-    # [OPT]: choose the sampling method: isotropic IC drawn from Eddington DF are created by
-    #   density.sample(numorbits, potential)
-    # while IC with preferential rotation (for disky models) are constructed from axisymmetric Jeans eqns by
-    #   density.sample(numorbits, potential, beta={0-0.5}, kappa={1 or -1, depending on sign of rotation})
-    # Here we add together two sets of IC - the majority of orbits sampled with axisymmetric Jeans eqns,
-    # plus a small fraction additionally sampled from the central region to improve coverage.
-    # Different values of the 'seed' parameter will create initial conditions with different number of orbits,
-    # which effectively makes a completely new random sample, and then the number is truncated back to numOrbits.
-    ic = numpy.vstack((
-        densityStars.sample(int(numOrbits*0.85)+seed, potential=pot_fidu, beta=0.3, kappa=1)[0][seed:],
-        densityExtra.sample(int(numOrbits*0.15), potential=pot_fidu)[0] ))
+    if Mbh is not None:
+        BhSteps = [float(Mbh)] # single MBH provided, convert to float
+    elif initialMbh is not None and finalMbh is not None:
+        stepSize = 0.5
+        # range provided; calculate steps:
+        initialMbh = float(initialMbh)
+        finalMbh = float(finalMbh)
+        BhSteps = numoy.arange(initialMbh, finalMbh + stepSize, stepSize)
+    else:
+        # No MBH information provided, default to a single pre-defined value
+        BhSteps = [8.0] # set default Mbh value
 
-
-    # launch the orbit library and perform fits for several values of Upsilon;
-    agama.schwarzlib.runModel(datasets=datasets, potential=pot_total, ic=ic,
-        intTime=intTime, Upsilon=Upsilon, multstep=multstep, regul=regul, Omega=Omega,
-        # [OPT] prefix - common part of the file name storing LOSVDs of each model in this series;
-        # the value of Upsilon is appended to each filename;  here one may adjust the string format or the list of parameters to store
-        filePrefix = 'M%.3g_O%.3g_Rh%.3g_Vh%.3g_i%.0f_a%.0f_N%d_R%.2f_%s' %
-            (Mbh, Omega, rhalo, vhalo, incl, alpha_deg, numOrbits, regul, variant),
-        # [OPT] data stored at the beginning of each line (= a separate model with a given Upsilon) in the results/summary file;
-        # usually should contains the same parameters as in filePrefix, but separated by tabs.
-        # Keep track of the order of parameters - when reading the results file in the plotting part of this script, the order should be the same.
-        # After the linePrefix, each line in the result file will contain the value of Upsilon, values of chi2 for each dataset,
-        # regularization penalty, and the name of the file with LOSVD of that model.
-        linePrefix = '\t'.join([ '%.3g' % Mbh, '%.3g' % Omega, '%.3g' % rhalo, '%.3g' % vhalo,
-            '%.0f' % incl, '%.0f' % alpha_deg, '%d' % numOrbits, '%.2f' % regul ]),
-        # [OPT] results/summary file
-        fileResult = fileResult,
-        # [OPT] parameters for the N-body snapshot representing the best-fit model
-        nbody = nbody, nbodyFormat = nbodyFormat )
+    for i in tqdm(BhSteps):
+        Mbh = 10**i
+    
+        # prepare initial conditions - use the same total potential independent of the actual Mbh
+        # [OPT]: choose the sampling method: isotropic IC drawn from Eddington DF are created by
+        #   density.sample(numorbits, potential)
+        # while IC with preferential rotation (for disky models) are constructed from axisymmetric Jeans eqns by
+        #   density.sample(numorbits, potential, beta={0-0.5}, kappa={1 or -1, depending on sign of rotation})
+        # Here we add together two sets of IC - the majority of orbits sampled with axisymmetric Jeans eqns,
+        # plus a small fraction additionally sampled from the central region to improve coverage.
+        # Different values of the 'seed' parameter will create initial conditions with different number of orbits,
+        # which effectively makes a completely new random sample, and then the number is truncated back to numOrbits.
+        ic = numpy.vstack((
+            densityStars.sample(int(numOrbits*0.85)+seed, potential=pot_fidu, beta=0.3, kappa=1)[0][seed:],
+            densityExtra.sample(int(numOrbits*0.15), potential=pot_fidu)[0] ))
+    
+    
+        # launch the orbit library and perform fits for several values of Upsilon;
+        agama.schwarzlib.runModel(datasets=datasets, potential=pot_total, ic=ic,
+            intTime=intTime, Upsilon=Upsilon, multstep=multstep, regul=regul, Omega=Omega,
+            # [OPT] prefix - common part of the file name storing LOSVDs of each model in this series;
+            # the value of Upsilon is appended to each filename;  here one may adjust the string format or the list of parameters to store
+            filePrefix = 'M%.3g_O%.3g_Rh%.3g_Vh%.3g_i%.0f_a%.0f_N%d_R%.2f_%s' %
+                (Mbh, Omega, rhalo, vhalo, incl, alpha_deg, numOrbits, regul, variant),
+            # [OPT] data stored at the beginning of each line (= a separate model with a given Upsilon) in the results/summary file;
+            # usually should contains the same parameters as in filePrefix, but separated by tabs.
+            # Keep track of the order of parameters - when reading the results file in the plotting part of this script, the order should be the same.
+            # After the linePrefix, each line in the result file will contain the value of Upsilon, values of chi2 for each dataset,
+            # regularization penalty, and the name of the file with LOSVD of that model.
+            linePrefix = '\t'.join([ '%.3g' % Mbh, '%.3g' % Omega, '%.3g' % rhalo, '%.3g' % vhalo,
+                '%.0f' % incl, '%.0f' % alpha_deg, '%d' % numOrbits, '%.2f' % regul ]),
+            # [OPT] results/summary file
+            fileResult = fileResult,
+            # [OPT] parameters for the N-body snapshot representing the best-fit model
+            nbody = nbody, nbodyFormat = nbodyFormat )
 
 elif command == 'TEST':
 

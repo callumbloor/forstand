@@ -145,7 +145,7 @@ args = dict(arglist)
 distance  = float(args.get('DISTANCE', 20626.5))# [REQ] assumed distance [kpc]
 arcsec2kpc= distance * numpy.pi / 648000        # conversion factor (number of kiloparsecs in one arcsecond)
 agama.setUnits(mass=1, length=arcsec2kpc, velocity=1)  # [OPT] units: mass = 1 Msun, length = 1", velocity = 1 km/s
-Mbh       = float(args.get('MBH', None))        # [REQ] mass of the central black hole  [Msun] (logarithmic)
+Mbh       = (args.get('MBH', None))             # [REQ] mass of the central black hole  [Msun] (logarithmic)
 initialMbh= (args.get('START', None))           # [OPT] start value for automated black hole mass models (logarithmic)
 finalMbh  = (args.get('END', None))             # [OPT] final value for automated black hole mass models (logarithmic)
 Omega     = float(args.get('OMEGA', 0))         # [REQ] pattern speed (relevant only for non-axisymmetric models) [km/s/length_unit]

@@ -1362,6 +1362,7 @@ def runPlot(datasets,                           # list of [kinematic] datasets t
         ax.text(0.5, 0.99, r'$\mathrm{min}\,\chi^2=%.2f$' % min(chi2), color='r', ha='center', va='top', transform=ax.transAxes)
         ax.set_xlabel(alabel, labelpad=0)
         ax.set_ylabel(blabel, labelpad=0)
+        ax.set_xscale('log') # set graph of chi^2 so that the x-axis (mbh values) is logarithmic. good to use for refining the black hole mass
         if alim is None: alim = (min(aval), max(aval))
         if blim is None: blim = (min(bval), max(bval))
         anorm = alim[1]-alim[0]
